@@ -1,0 +1,11 @@
+# ignore folders
+cache
+data
+kernel_meta*
+*.pt
+*.pth
+openai*
+.vscode
+*__pycache__
+*.ipynb_checkpoints
+logs
