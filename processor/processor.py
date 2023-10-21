@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from prettytable import PrettyTable
 from sklearn.cluster import DBSCAN
 from utils.re_ranking import re_ranking
+from collections import OrderedDict
 
 
 def generate_pseudo_labels(cluster_id, num, train_loader):
@@ -54,13 +55,39 @@ def extract_features(model, train_loader):
 def extract_features(model, train_loader):
         model.eval()
         device = torch.device("npu")
-        
-        
+          
         images_feats = torch.empty((0,512)).to(device)
         texts_feats = torch.empty((0,512)).to(device)
         
         with torch.no_grad():
             for n_iter, batch in enumerate(train_loader):
+                batch = {k: v.to(device) for k, v in batch.items()}
+                images = batch['images']
+                caption_ids = batch['caption_ids']
+                
+                image_feats, text_feats = model.base_model(images, caption_ids)
+                
+                i_feats = image_feats[:, 0, :].float()
+                # i_feats = image_feats.float() # for CLIP ResNet visual model
+                t_feats = text_feats[torch.arange(text_feats.shape[0]), caption_ids.argmax(dim=-1)].float()
+                
+                images_feats = torch.cat((images_feats, i_feats), dim=0)
+                texts_feats = torch.cat((texts_feats, i_feats), dim=0)
+                
+            print('=================================')
+
+        return images_feats, texts_feats
+
+
+def rerank_extract_features(model, train_loader):
+        model.eval()
+        device = torch.device("npu")
+        
+        images_feats = torch.empty((0,512)).to(device)
+        texts_feats = torch.empty((0,512)).to(device)
+        
+        with torch.no_grad():
+            for n_iter, batch in enumerate(sorted(train_loader)):
                 batch = {k: v.to(device) for k, v in batch.items()}
                 images = batch['images']
                 caption_ids = batch['caption_ids']
@@ -111,8 +138,10 @@ def do_train(start_epoch, args, model, train_loader, evaluator, optimizer,
 
     # train
     for epoch in range(start_epoch, num_epoch + 1):
-        
+
         images_features, texts_features = extract_features(model, train_loader)
+
+        # images_features, texts_features = rerank_extract_features(model, train_loader)
         
         rerank_dist = re_ranking(images_features,  k1=args.k1, k2=args.k2)
         
@@ -125,11 +154,21 @@ def do_train(start_epoch, args, model, train_loader, evaluator, optimizer,
         pseudo_labels = generate_pseudo_labels(pseudo_labels, num_ids, train_loader)
         
         args.num_clusters = num_ids
-        
-    
+
+        pseudo_labeled_dataset = []
+        for i, (fname, label) in enumerate(zip(sorted(train_loader.dataset.dataset), pseudo_labels)):
+            pseudo_labeled_dataset.append((fname, label.item()))
+             
         start_time = time.time()
         for meter in meters.values():
             meter.reset()
+        
+
+        pseudo_labeled_dataset = [(i[0][0],i[0][1],i[1]) for i in pseudo_labeled_dataset]
+        train_loader.dataset.dataset = pseudo_labeled_dataset
+
+        batch = next(iter(train_loader))
+
         model.train()
 
         for n_iter, batch in enumerate(train_loader):

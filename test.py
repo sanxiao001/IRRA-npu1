@@ -9,6 +9,8 @@ import time
 import os.path as op
 
 from datasets import build_dataloader
+from datasets import build_cluster_dataloader
+
 from processor.processor import do_inference
 from utils.checkpoint import Checkpointer
 from utils.logger import setup_logger

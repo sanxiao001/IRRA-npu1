@@ -7,6 +7,7 @@ import random
 import time
 
 from datasets import build_dataloader
+from datasets import build_cluster_dataloader
 from processor.processor import do_train
 from utils.checkpoint import Checkpointer
 from utils.iotools import save_train_configs
@@ -53,7 +54,13 @@ if __name__ == '__main__':
     save_train_configs(args.output_dir, args)
 
     # get image-text pair datasets dataloader
-    train_loader, val_img_loader, val_txt_loader = build_dataloader(args)
+    # shuffle = True
+    # train_loader, val_img_loader, val_txt_loader = build_dataloader(args)
+    # batch1 = next(iter(train_loader))
+    # shuffle = False
+    train_loader, val_img_loader, val_txt_loader = build_cluster_dataloader(args)
+    # batch2 = next(iter(train_loader))
+    
     model = build_model(args)
     logger.info('Total params: %2.fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
     model.to(device)
